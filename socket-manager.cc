@@ -1,25 +1,7 @@
 #include "socket-manager.h"
+#include <iostream>
 #include <unistd.h>
 
-//peer_socket
-peer_socket::peer_socket(int id, int fd, sockaddr_in& addr): peer_id{id}, socket_fd{fd}, peer_addr{addr}{
-}
-
-int peer_socket::get_peer_id(){
-    return peer_id;
-}
-
-int peer_socket::get_socket_fd(){
-    return socket_fd;
-}
-
-void peer_socket::set_socket_fd(int fd){
-    socket_fd = fd;
-}
-
-sockaddr_in peer_socket::get_peer_addr(){
-    return peer_addr;
-}
 
 //peer_socket_manager
 peer_socket_manager::peer_socket_manager(string ip, short port){
@@ -29,6 +11,59 @@ peer_socket_manager::peer_socket_manager(string ip, short port){
     mode = 0;
     server_socket = 0;
 }
+
+int peer_socket_manager::accept_peer_socket(){
+    int tmp_socket,rc,id{0};
+    int addr_size = sizeof(sockaddr_in);
+    tmp_socket = accept(server_socket, (struct sockaddr*)&self_addr, (socklen_t*)&addr_size);
+    if(tmp_socket < 0){
+        return -1;
+    }
+    //peer_idの受信
+    rc = recv(tmp_socket, &id, sizeof(int), 0);
+    if(rc != 0){
+        close(tmp_socket);
+        return -1;
+    }
+
+    if(id == 0){
+        //新規idを要求
+        int new_id{1};
+        while(true){
+            if(fd_map.find(new_id) == fd_map.end()){
+                //fd_mapに登録されていないid
+                break;
+            }
+            new_id++;
+        }
+        id = new_id;
+        //新規idを返信
+        rc = send(tmp_socket, &new_id, sizeof(int), 0);
+        if(rc != 0){
+            close(tmp_socket);
+        }
+        fd_map.insert(std::make_pair(new_id, tmp_socket));
+        return new_id;
+    }else if(id > 0){
+        //再接続を要求
+        //idを返信
+        rc = send(tmp_socket, &id, sizeof(int), 0);
+        if(rc != 0){
+            close(tmp_socket);
+            return -1;
+        }
+        //fd_mapを更新
+        fd_map.insert_or_assign(id, tmp_socket);
+    }else{
+        //接続エラー
+        id = -1;
+        rc = send(tmp_socket, &id, sizeof(int), 0);
+        close(tmp_socket);
+        return -1;
+    }
+    return id;
+}
+
 
 int peer_socket_manager::start_server(){
     int rc{0};
@@ -54,6 +89,8 @@ int peer_socket_manager::start_server(){
         return -1;
     }
 
+    //acceptスレッドを起動
+
     mode = 1;
 
     return server_socket;    
@@ -73,27 +110,10 @@ int peer_socket_manager::stop_server(){
 }
 
 //新規ペアを接続
-peer_socket peer_socket_manager::accept_peer(){
-    lock_guard<mutex> lock(mtx);
-    peer_socket psocket;
-    int tmp_socket{0};
-
-    //クライアントソケット生成
-    auto addr_size = sizeof(sockaddr_in);
-    tmp_socket = accept(server_socket, (struct sockaddr*)&self_addr, (socklen_t*)&addr_size);
-    if(tmp_socket < 0){
-        return client_socket;
-    }
-
-    char str[INET_ADDRSTRLEN] = {0};
-    inet_ntop(AF_INET, &client_addr.sin_addr, str, INET_ADDRSTRLEN);
-    std::cout << "[server] accept ip " << str << " accept port " << client_addr.sin_port << std::endl;
-    return client_socket;
+int peer_socket_manager::accept_peer(shared_ptr<peer_socket> psocket){
+    return 0;
 }
 
-int peer_socket_manager::accept_peer(peer_socket& peer){
-    lock_guard<mutex> lock(mtx);
-}
 
 
 
