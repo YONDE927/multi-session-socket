@@ -17,19 +17,25 @@ class session_master{
 		int socket_fd;
 		bool term;
 		std::map<int, session_child> children;
-		std::thread transport_th;
+		std::thread recv_th;
+		std::thread send_th;
 		std::mutex mtx;
 		std::condition_variable cond;
 
 		int sizeof_send_buffer();
 		int sizeof_recv_buffer();
-		void transfer_task();
+		void send_task();
+		void recv_task();
 	public:
 		session_master(int _socket_fd);
 		~session_master();
 		void run();
+		void stop();
 		int new_session();
-		int delete_session();
+		int delete_session(int session_id);
 		int send_data(int session_id, const std::vector<char>& buffer);
 		int recv_data(int session_id, std::vector<char>& buffer);
 };
+
+//これいらないじゃないか
+//始祖ファイルさえ一つのソケットで創ってしまえば問題ないのでは？
